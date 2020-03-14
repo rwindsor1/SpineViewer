@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Spine Rendering</title>
+		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+		<style>
+			body { margin: 0;
+				   /* background-color: black; */
+				   color: white;}
+			canvas { width: 100%; height: 100% }
+			* {
+				-webkit-tap-highlight-color: rgba(255, 255, 255, 0) !important; 
+				-webkit-focus-ring-color: rgba(255, 255, 255, 0) !important; 
+				outline: none !important;
+			}
+			#info {
+				position: absolute;
+				top: 10px;
+				width: 50%;
+				left: 30px;
+				z-index: 100;
+				display:block;
+			}
+			#tooltip {
+  				position: fixed;
+  				left: 0;
+  				top: 0;
+  				min-width: 100px;
+  				text-align: center;
+  				padding: 5px 12px;
+  				font-family: monospace;
+  				background: #a0c020;
+  				display: none;
+  				opacity: 0;
+  				border: 1px solid black;
+  				box-shadow: 2px 2px 3px rgba(0, 0, 0, 0.5);
+  				transition: opacity 0.25s linear;
+  				border-radius: 3px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="info">
+			<h1> SpineNet Viewer </h1>
+
+		</div>
+
+		<div id="tooltip"></div>
+
+
+		<script src=" https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.js"></script>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+		<!-- Load in javascript function to draw polygons -->
+		<script src="js/draw_polys.js"></script>
+		<script src="js/correct_poly_coords.js"></script>
+		<script src="js/OrbitControls.js"></script>
+		<script>
+
+			var raycaster = new THREE.Raycaster();
+			var tooltipDisplayTimeout;
+
+			function getJSON(string_) {
+				// NOTE:  This function must return the value 
+				//        from calling the $.ajax() method.
+				return $.getJSON(string_)
+			}
+			$.when(getJSON('./example_vert_json/example_json.json')).done(function(jsonData){
+
+				correct_poly_coords(jsonData);
+				vertebraeGeometries = draw_polys(jsonData);
+				// background_color = new THREE.Color('skyblue');
+				scene = new THREE.Scene();
+
+				// scene.background = background_color;
+				var camera = new THREE.PerspectiveCamera( 90, window.innerWidth/window.innerHeight, 0.1, 1000 );
+				
+				var renderer = new THREE.WebGLRenderer();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.setClearColor(0x000000);
+				renderer.shadowMap.Enabled = true;
+
+
+
+				document.body.appendChild( renderer.domElement );
+				// mouse controls
+
+				var mouse = new THREE.Vector2();
+				var camera = new THREE.PerspectiveCamera( 90, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+
+				function updateMouseCoords( event ) 
+				{
+					// the following line would stop any other event handler from firing
+					// (such as the mouse's TrackballControls)
+					// event.preventDefault();
+	
+					// update the mouse variable
+					mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+					mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+				}
+
+				function onMouseMove(event) {
+    				updateMouseCoords(event, mouse);
+
+    				latestMouseProjection = undefined;
+    				hoveredObj = undefined;
+    				handleManipulationUpdate();
+				}
+
+
+				function showTooltip() {
+    				var divElement = $("#tooltip");
+
+    				if (divElement && latestMouseProjection) {
+        				divElement.css({
+            				display: "block",
+            				opacity: 0.0
+        				});
+
+        				var canvasHalfWidth = renderer.domElement.offsetWidth / 2;
+        				var canvasHalfHeight = renderer.domElement.offsetHeight / 2;
+
+        				var tooltipPosition = latestMouseProjection.clone().project(camera);
+        				tooltipPosition.x = (tooltipPosition.x * canvasHalfWidth) + canvasHalfWidth + renderer.domElement.offsetLeft;
+        				tooltipPosition.y = -(tooltipPosition.y * canvasHalfHeight) + canvasHalfHeight + renderer.domElement.offsetTop;
+
+        				var tootipWidth = divElement[0].offsetWidth;
+        				var tootipHeight = divElement[0].offsetHeight;
+
+        				divElement.css({
+            				left: `${tooltipPosition.x - tootipWidth/2}px`,
+            				top: `${tooltipPosition.y - tootipHeight - 5}px`
+        				});
+
+        				// var position = new THREE.Vector3();
+        				// var quaternion = new THREE.Quaternion();
+        				// var scale = new THREE.Vector3();
+        				// hoveredObj.matrix.decompose(position, quaternion, scale);
+        				divElement.text(hoveredObj.userData.tooltipText);
+
+        				setTimeout(function() {
+            				divElement.css({
+                				opacity: 1.0
+            				});
+        				}, 25);
+    				}
+				}
+
+
+				function hideTooltip() {
+    				var divElement = $("#tooltip");
+    				if (divElement) {
+        				divElement.css({
+            				display: "none"
+        				});
+    				}
+				}
+
+				function handleManipulationUpdate() {
+    				raycaster.setFromCamera(mouse, camera); {
+        				var intersects = raycaster.intersectObjects(scene.children);
+        				if (intersects.length > 0) {
+            				latestMouseProjection = intersects[0].point;
+            				hoveredObj = intersects[0].object;
+        				}
+    				}
+
+    				if (tooltipDisplayTimeout || !latestMouseProjection) {
+        				clearTimeout(tooltipDisplayTimeout);
+        				tooltipDisplayTimeout = undefined;
+        				hideTooltip();
+    				}
+
+    				if (!tooltipDisplayTimeout && latestMouseProjection) {
+        				tooltipDisplayTimeout = setTimeout(function() {
+            				tooltipDisplayTimeout = undefined;
+            				showTooltip();
+        				}, 330);
+    				}
+				}
+
+				
+				
+				material = new THREE.MeshBasicMaterial( { 
+												   			  color: 0xFBFF00,
+															  // wireframe : true,
+			wireframe : true,
+															  side: THREE.DoubleSide,
+															  
+															  transparent: false} );
+				
+				
+
+
+				
+				
+				meshes = [];
+				vertebraeGeometries.forEach(function(element){
+					new_mesh = new THREE.Mesh( element, material);
+					new_mesh.userData.tooltipText = 'vertebrae'
+					meshes.push(
+						new_mesh
+					)
+				});
+
+				meshes.forEach(function(element){
+					scene.add(element)
+				});
+
+				// add lighting
+				controls = new THREE.OrbitControls( camera, renderer.domElement );
+				camera.position.z = 300;
+				controls.update()
+				var axesHelper = new THREE.AxesHelper( 40 );
+				//scene.add( axesHelper );
+				//scene.rotation.y = -3.14/2
+				var animate = function () {
+					requestAnimationFrame( animate );
+					controls.update()
+					renderer.render( scene, camera );
+				};
+				window.addEventListener('mousemove', onMouseMove, false);
+
+
+				animate();
+			})
+		</script>
+
+
+
+    </body>
+    
+</html>
